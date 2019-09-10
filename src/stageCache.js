@@ -49,6 +49,37 @@ const createPatchForStage = (settings) => {
       value: `${settings.cacheTtlInSeconds}`
     });
   }
+
+  path.push({
+    op: 'replace',
+    path: '/*/*/throttling/burstLimit',
+    value: `${settings.throttlingBurstLimit}`
+  });
+
+  path.push({
+    op: 'replace',
+    path: '/*/*/throttling/rateLimit',
+    value: `${settings.throttlingRateLimit}`
+  });
+
+  path.push({
+    op: 'replace',
+    path: '/*/*/metrics/metrics',
+    value: `${settings.metricsEnabled}`
+  });
+
+  if (settings.loggingEnabled) {
+    path.push({
+      op: 'replace',
+      path: '/*/*/logging/dataTrace',
+      value: `${settings.logging.dataTrace}`
+    });
+    path.push({
+      op: 'replace',
+      path: '/*/*/logging/loglevel',
+      value: `${settings.logging.loggingLevel}`
+    });
+  }
   
   return patch;
 }
@@ -72,6 +103,38 @@ const patchForMethod = (path, method, endpointSettings) => {
       value: `${endpointSettings.dataEncrypted}`
     });
   }
+
+  path.push({
+    op: 'replace',
+    path: `/${patchPath}/throttling/burstLimit`,
+    value: `${settings.throttlingBurstLimit}`
+  });
+
+  path.push({
+    op: 'replace',
+    path: `/${patchPath}/throttling/rateLimit`,
+    value: `${settings.throttlingRateLimit}`
+  });
+
+  path.push({
+    op: 'replace',
+    path: `/${patchPath}/metrics/metrics`,
+    value: `${settings.metricsEnabled}`
+  });
+
+  if (settings.logging.enabled) {
+    path.push({
+      op: 'replace',
+      path: `/${patchPath}/logging/dataTrace`,
+      value: `${settings.logging.dataTrace}`
+    });
+    path.push({
+      op: 'replace',
+      path: `/${patchPath}/logging/loglevel`,
+      value: `${settings.logging.loggingLevel}`
+    });
+  }
+
   if (endpointSettings.perKeyInvalidation) {
     patch.push({
       op: 'replace',
