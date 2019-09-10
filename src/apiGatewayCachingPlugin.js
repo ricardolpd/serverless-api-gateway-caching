@@ -1,9 +1,9 @@
 'use strict';
 
 const ApiGatewayCachingSettings = require('./ApiGatewayCachingSettings');
-const addPathParametersCacheConfig = require('./pathParametersCache');
+const pathParametersCache = require('./pathParametersCache');
 const updateStageCacheSettings = require('./stageCache');
-const { outputRestApiIdTo } = require('./restApiId');
+const { restApiExists, outputRestApiIdTo } = require('./restApiId');
 
 class ApiGatewayCachingPlugin {
   constructor(serverless, options) {
@@ -22,7 +22,7 @@ class ApiGatewayCachingPlugin {
   }
 
   updateCloudFormationTemplate() {
-    this.thereIsARestApi = this.restApiExists();
+    this.thereIsARestApi = restApiExists(this.serverless);
     if (!this.thereIsARestApi) {
       this.serverless.cli.log(`[serverless-api-gateway-caching] No Rest API found. Caching settings will not be updated.`);
       return;
@@ -35,23 +35,21 @@ class ApiGatewayCachingPlugin {
       return;
     }
 
-    return addPathParametersCacheConfig(this.settings, this.serverless);
+    return pathParametersCache.addPathParametersCacheConfig(this.settings, this.serverless);
   }
 
   updateStage() {
+    this.thereIsARestApi = restApiExists(this.serverless);
     if (!this.thereIsARestApi) {
       this.serverless.cli.log(`[serverless-api-gateway-caching] No Rest API found. Caching settings will not be updated.`);
       return;
     }
-    return updateStageCacheSettings(this.settings, this.serverless);
-  }
 
-  restApiExists() {
-    let resource = this.serverless.service.provider.compiledCloudFormationTemplate.Resources['ApiGatewayRestApi'];
-    if (resource) {
-      return true;
+    if (!this.settings) {
+      this.createSettings()
     }
-    return false;
+
+    return updateStageCacheSettings(this.settings, this.serverless);
   }
 }
 

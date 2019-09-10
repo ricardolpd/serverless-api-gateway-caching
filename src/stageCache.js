@@ -1,5 +1,6 @@
 const isEmpty = require('lodash.isempty');
 const { retrieveRestApiId } = require('./restApiId');
+const MAX_PATCH_OPERATIONS_PER_STAGE_UPDATE = 80;
 
 String.prototype.replaceAll = function (search, replacement) {
   let target = this;
@@ -18,18 +19,37 @@ const escapeJsonPointer = path => {
 }
 
 const createPatchForStage = (settings) => {
+
+  if (settings.apiGatewayIsShared) {
+    return [];
+  }
+
   let patch = [{
     op: 'replace',
     path: '/cacheClusterEnabled',
     value: `${settings.cachingEnabled}`
-  }]
+  }];
+
   if (settings.cachingEnabled) {
     patch.push({
       op: 'replace',
       path: '/cacheClusterSize',
       value: `${settings.cacheClusterSize}`
     });
+
+    patch.push({
+      op: 'replace',
+      path: '/*/*/caching/dataEncrypted',
+      value: `${settings.dataEncrypted}`    
+    });
+
+    patch.push({
+      op: 'replace',
+      path: '/*/*/caching/ttlInSeconds',
+      value: `${settings.cacheTtlInSeconds}`
+    });
   }
+  
   return patch;
 }
 
@@ -45,7 +65,12 @@ const patchForMethod = (path, method, endpointSettings) => {
       op: 'replace',
       path: `/${patchPath}/caching/ttlInSeconds`,
       value: `${endpointSettings.cacheTtlInSeconds}`
-    })
+    });
+    patch.push({
+      op: 'replace',
+      path: `/${patchPath}/caching/dataEncrypted`,
+      value: `${endpointSettings.dataEncrypted}`
+    });
   }
   if (endpointSettings.perKeyInvalidation) {
     patch.push({
@@ -64,17 +89,39 @@ const patchForMethod = (path, method, endpointSettings) => {
   return patch;
 }
 
+const httpEventOf = (lambda, endpointSettings) => {
+  let httpEvents = lambda.events.filter(e => e.http != undefined)
+    .map(e => {
+      if (typeof (e.http) === 'string') {
+        let parts = e.http.split(' ');
+        return {
+          method: parts[0],
+          path: parts[1]
+        }
+      } else {
+        return {
+          method: e.http.method,
+          path: e.http.path
+        }
+      }
+    });
+
+  return httpEvents.filter(e => e.path = endpointSettings.path || "/" + e.path === endpointSettings.path)
+    .filter(e => e.method.toUpperCase() == endpointSettings.method.toUpperCase());
+}
+
 const createPatchForEndpoint = (endpointSettings, serverless) => {
   let lambda = serverless.service.getFunction(endpointSettings.functionName);
   if (isEmpty(lambda.events)) {
     serverless.cli.log(`[serverless-api-gateway-caching] Lambda ${endpointSettings.functionName} has not defined events.`);
+    return;
   }
-  // TODO there can be many http events
-  let httpEvents = lambda.events.filter(e => e.http != null);
+  const httpEvents = httpEventOf(lambda, endpointSettings);
   if (isEmpty(httpEvents)) {
     serverless.cli.log(`[serverless-api-gateway-caching] Lambda ${endpointSettings.functionName} has not defined any HTTP events.`);
+    return;
   }
-  let { path, method } = httpEvents[0].http;
+  let { path, method } = httpEvents[0];
 
   let patch = [];
   if (method.toUpperCase() == 'ANY') {
@@ -99,6 +146,31 @@ const patchPathFor = (path, method) => {
   }
   let patchPath = `${escapedPath}/${method.toUpperCase()}`;
   return patchPath;
+}
+
+const updateStageFor = async (serverless, params, stage, region) => {
+  const chunkSize = MAX_PATCH_OPERATIONS_PER_STAGE_UPDATE;
+  const { patchOperations } = params;
+  const paramsInChunks = [];
+  if (patchOperations.length > chunkSize) {
+    for (let i = 0; i < patchOperations.length; i += chunkSize) {
+      paramsInChunks.push({
+        restApiId: params.restApiId,
+        stageName: params.stageName,
+        patchOperations: patchOperations.slice(i, i + chunkSize)
+      });
+    }
+  }
+  else {
+    paramsInChunks.push(params);
+  }
+
+  for (let index in paramsInChunks) {
+    serverless.cli.log(`[serverless-api-gateway-caching] Updating API Gateway cache settings (${parseInt(index) + 1} of ${paramsInChunks.length}).`);
+    await serverless.providers.aws.request('APIGateway', 'updateStage', paramsInChunks[index], stage, region);
+  }
+
+  serverless.cli.log(`[serverless-api-gateway-caching] Done updating API Gateway cache settings.`);
 }
 
 const updateStageCacheSettings = async (settings, serverless) => {
@@ -126,9 +198,7 @@ const updateStageCacheSettings = async (settings, serverless) => {
     patchOperations: patchOps
   }
 
-  serverless.cli.log(`[serverless-api-gateway-caching] Updating API Gateway cache settings.`);
-  await serverless.providers.aws.request('APIGateway', 'updateStage', params, settings.stage, settings.region);
-  serverless.cli.log(`[serverless-api-gateway-caching] Done updating API Gateway cache settings.`);
+  await updateStageFor(serverless, params, settings.stage, settings.region);
 }
 
 module.exports = updateStageCacheSettings;

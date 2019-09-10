@@ -1,4 +1,4 @@
-const chance = require('chance').Chance();
+const split = require('lodash.split');
 
 class Serverless {
   constructor(serviceName) {
@@ -33,12 +33,14 @@ class Serverless {
     return this;
   }
 
-  withApiGatewayCachingConfig(cachingEnabled, clusterSize, ttlInSeconds, perKeyInvalidation) {
+  withApiGatewayCachingConfig(cachingEnabled, clusterSize, ttlInSeconds, perKeyInvalidation, dataEncrypted, apiGatewayIsShared) {
     this.service.custom.apiGatewayCaching = {
       enabled: cachingEnabled,
+      apiGatewayIsShared: apiGatewayIsShared,
       clusterSize,
       ttlInSeconds,
-      perKeyInvalidation
+      perKeyInvalidation,
+      dataEncrypted
     };
     return this;
   }
@@ -50,7 +52,7 @@ class Serverless {
     let functionName = Object.keys(serverlessFunction)[0];
     this.service.functions[functionName] = serverlessFunction[functionName];
 
-    let { functionResourceName, methodResourceName } = addFunctionToCompiledCloudFormationTemplate(functionName, this);
+    let { functionResourceName, methodResourceName } = addFunctionToCompiledCloudFormationTemplate(serverlessFunction, this);
     if (!this._functionsToResourcesMapping) {
       this._functionsToResourcesMapping = {}
     }
@@ -58,11 +60,25 @@ class Serverless {
       functionResourceName,
       methodResourceName
     }
+    // when a function with an http endpoint is defined, serverless creates an ApiGatewayRestApi resource
+    this.service.provider.compiledCloudFormationTemplate.Resources['ApiGatewayRestApi'] = {};
+    return this;
+  }
+
+  withPredefinedRestApiId(restApiId) {
+    if (!this.service.provider.apiGateway) {
+      this.service.provider.apiGateway = {}
+    }
+    this.service.provider.apiGateway.restApiId = restApiId;
     return this;
   }
 
   getMethodResourceForFunction(functionName) {
     let { methodResourceName } = this._functionsToResourcesMapping[functionName];
+    return this.service.provider.compiledCloudFormationTemplate.Resources[methodResourceName];
+  }
+
+  getMethodResourceForMethodName(methodResourceName) {
     return this.service.provider.compiledCloudFormationTemplate.Resources[methodResourceName];
   }
 
@@ -107,19 +123,66 @@ class Serverless {
 
 const clone = object => JSON.parse(JSON.stringify(object));
 
-const addFunctionToCompiledCloudFormationTemplate = (functionName, serverless) => {
+const createMethodResourceNameFor = (path, method) => {
+  const pathElements = split(path, '/');
+  pathElements.push(method.toLowerCase());
+  let gatewayResourceName = pathElements
+    .map(element => {
+      element = element.toLowerCase();
+      element = element.replaceAll('+', '');
+      element = element.replaceAll('_', '');
+      element = element.replaceAll('.', '');
+      element = element.replaceAll('-', 'Dash');
+      if (element.startsWith('{')) {
+        element = element.substring(element.indexOf('{') + 1, element.indexOf('}')) + "Var";
+      }
+      return element.charAt(0).toUpperCase() + element.slice(1);
+    }).reduce((a, b) => a + b);
+
+  gatewayResourceName = "ApiGatewayMethod" + gatewayResourceName;
+  return gatewayResourceName;
+}
+
+const addFunctionToCompiledCloudFormationTemplate = (serverlessFunction, serverless) => {
+  const functionName = Object.keys(serverlessFunction)[0];
   const fullFunctionName = `${serverless.service.service}-${serverless.service.provider.stage}-${functionName}`;
   let { Resources } = serverless.service.provider.compiledCloudFormationTemplate;
   let functionTemplate = clone(require('./templates/aws-lambda-function'));
   functionTemplate.Properties.FunctionName = fullFunctionName;
-  let functionResourceName = chance.word({ length: 10 });
+  let functionResourceName = `${functionName}LambdaFunction`;
   Resources[functionResourceName] = functionTemplate;
 
   let methodTemplate = clone(require('./templates/aws-api-gateway-method'));
   let stringifiedMethodTemplate = JSON.stringify(methodTemplate);
   stringifiedMethodTemplate = stringifiedMethodTemplate.replace('#{LAMBDA_RESOURCE_DEPENDENCY}', functionResourceName);
   methodTemplate = JSON.parse(stringifiedMethodTemplate);
-  methodResourceName = chance.word({ length: 12 });
+
+  const events = serverlessFunction[functionName].events;
+  if (!Array.isArray(events) || !events.length) {
+    methodResourceName = `ApiGatewayMethod${functionName}VarGet`;
+  } else {
+    for (event of events) {
+      // if event is defined in shorthand
+      let path, method;
+      if (typeof (event.http) === 'string') {
+        let parts = event.http.split(' ');
+        method = parts[0];
+        path = parts[1];
+      }
+      else {
+        path = event.http.path;
+        method = event.http.method;
+      }
+      methodResourceName = createMethodResourceNameFor(path, method);
+      if (event.http.integration == 'lambda') {
+        methodTemplate.Properties.Integration.Type = 'AWS_PROXY';
+      } else {
+        methodTemplate.Properties.Integration.Type = 'AWS';
+      }
+      Resources[methodResourceName] = methodTemplate;
+    }
+  }
+
   Resources[methodResourceName] = methodTemplate
   return { functionResourceName, methodResourceName }
 }

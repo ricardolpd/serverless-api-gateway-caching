@@ -223,7 +223,8 @@ describe('Creating settings', () => {
 
           let getCatByPawIdCaching = { enabled: true, ttlInSeconds: 30 };
           let getCatByPawId = given.a_serverless_function(getCatByPawIdFunctionName)
-            .withHttpEndpoint('get', '/cat/{pawId}', getCatByPawIdCaching);
+            .withHttpEndpoint('get', '/cat/{pawId}', getCatByPawIdCaching)
+            .withHttpEndpoint('delete', '/cat/{pawId}', getCatByPawIdCaching);
 
           let getMyCatCaching = { enabled: false };
           let getMyCat = given.a_serverless_function(getMyCatFunctionName)
@@ -240,7 +241,7 @@ describe('Creating settings', () => {
         });
 
         it('should create cache settings for all http endpoints', () => {
-          expect(cacheSettings.endpointSettings).to.have.lengthOf(3);
+          expect(cacheSettings.endpointSettings).to.have.lengthOf(4);
         });
 
         describe('caching for http endpoint without cache settings defined', () => {
@@ -507,6 +508,32 @@ describe('Creating settings', () => {
 
       it('should use the region from command line', () => {
         expect(cacheSettings.region).to.equal('someotherregion');
+      });
+    });
+  });
+
+  describe('when a http endpoint is defined in shorthand', () => {
+    describe(`and caching is turned on globally`, () => {
+      before(() => {
+        endpoint = given.a_serverless_function('list-cats')
+          .withHttpEndpointInShorthand('get /cats');
+        serverless = given.a_serverless_instance()
+          .withApiGatewayCachingConfig(true)
+          .withFunction(endpoint);
+
+        cacheSettings = createSettingsFor(serverless);
+      });
+
+      it('settings should contain the endpoint method', () => {
+        expect(cacheSettings.endpointSettings[0].method).to.equal('get');
+      });
+
+      it('settings should contain the endpoint path', () => {
+        expect(cacheSettings.endpointSettings[0].path).to.equal('/cats');
+      });
+
+      it('caching should not be enabled for the http endpoint', () => {
+        expect(cacheSettings.endpointSettings[0].cachingEnabled).to.be.false;
       });
     });
   });
