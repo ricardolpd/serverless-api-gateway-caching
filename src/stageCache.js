@@ -46,7 +46,38 @@ const createPatchForStage = (settings) => {
     patch.push({
       op: 'replace',
       path: '/*/*/caching/ttlInSeconds',
-      value: `${settings.cacheTtlInSeconds}`
+      value: `${settings.cacheTtlInSeconds}`,
+    });
+  }
+
+  patch.push({
+    op: 'replace',
+    path: '/*/*/throttling/burstLimit',
+    value: `${settings.throttlingBurstLimit}`,
+  });
+
+  patch.push({
+    op: 'replace',
+    path: '/*/*/throttling/rateLimit',
+    value: `${settings.throttlingRateLimit}`,
+  });
+
+  patch.push({
+    op: 'replace',
+    path: '/*/*/metrics/enabled',
+    value: `${settings.metricsEnabled}`
+  });
+
+  if (settings.loggingEnabled) {
+    patch.push({
+      op: 'replace',
+      path: '/*/*/logging/dataTrace',
+      value: `${settings.logging.dataTrace}`
+    });
+    patch.push({
+      op: 'replace',
+      path: '/*/*/logging/loglevel',
+      value: `${settings.logging.loggingLevel}`
     });
   }
   
@@ -72,6 +103,43 @@ const patchForMethod = (path, method, endpointSettings) => {
       value: `${endpointSettings.dataEncrypted}`
     });
   }
+
+
+  if (endpointSettings.throttlingBurstLimit && endpointSettings.throttlingRateLimit) {
+    patch.push({
+      op: 'replace',
+      path: `/${patchPath}/throttling/burstLimit`,
+      value: `${endpointSettings.throttlingBurstLimit}`,
+    });
+
+    patch.push({
+      op: 'replace',
+      path: `/${patchPath}/throttling/rateLimit`,
+      value: `${endpointSettings.throttlingRateLimit}`
+    });
+  }
+  
+  if (endpointSettings.metricsEnabled) {
+    patch.push({
+      op: 'replace',
+      path: `/${patchPath}/metrics/enabled`,
+      value: `${endpointSettings.metricsEnabled}`
+    });  
+  }
+
+  if (endpointSettings.logging && endpointSettings.logging.enabled) {
+    patch.push({
+      op: 'replace',
+      path: `/${patchPath}/logging/dataTrace`,
+      value: `${endpointSettings.logging.dataTrace}`
+    });
+    patch.push({
+      op: 'replace',
+      path: `/${patchPath}/logging/loglevel`,
+      value: `${endpointSettings.logging.loggingLevel}`
+    });
+  }
+
   if (endpointSettings.perKeyInvalidation) {
     patch.push({
       op: 'replace',
