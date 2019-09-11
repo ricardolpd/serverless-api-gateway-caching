@@ -2,9 +2,19 @@ const get = require('lodash.get');
 const { Ignore, IgnoreWithWarning, Fail } = require('./UnauthorizedCacheControlHeaderStrategy');
 
 const DEFAULT_CACHE_CLUSTER_SIZE = '0.5';
+const DEFAULT_THROTTLING_BURST_LIMIT = 5000;
+const DEFAULT_THROTTLING_RATE_LIMIT = 10000;
+const DEFAULT_METRICS_ENABLED = false;
 const DEFAULT_DATA_ENCRYPTED = false;
 const DEFAULT_TTL = 3600;
+const DEFAULT_LOGGING = {
+  enabled: false,
+  dataTrace: false,
+  loggingLevel: 'OFF',
+}
 const DEFAULT_UNAUTHORIZED_INVALIDATION_REQUEST_STRATEGY = IgnoreWithWarning;
+
+const validLoggingLevels = ['OFF', 'ERROR', 'INFO'];
 
 const mapUnauthorizedRequestStrategy = strategy => {
   if (!strategy) {
@@ -74,11 +84,17 @@ class ApiGatewayEndpointCachingSettings {
 
 class ApiGatewayCachingSettings {
   constructor(serverless, options) {
-    if (!get(serverless, 'service.custom.apiGatewayCaching')) {
+    if (!get(serverless, 'service.custom.apiGateway')) {
       return;
     }
-    this.cachingEnabled = serverless.service.custom.apiGatewayCaching.enabled;
-    this.apiGatewayIsShared = serverless.service.custom.apiGatewayCaching.apiGatewayIsShared;
+    this.cachingEnabled = serverless.service.custom.apiGateway.cachingEnabled;
+    this.apiGatewayIsShared = serverless.service.custom.apiGateway.apiGatewayIsShared;
+    this.logging = serverless.service.custom.apiGateway.logging || DEFAULT_LOGGING;
+    this.validateLoggingObject();
+    this.loggingEnabled = this.logging.enabled;
+    this.throttlingBurstLimit = serverless.service.custom.apiGateway.throttlingBurstLimit || DEFAULT_THROTTLING_BURST_LIMIT;
+    this.throttlingRateLimit = serverless.service.custom.apiGateway.throttlingRateLimit || DEFAULT_THROTTLING_RATE_LIMIT;
+    this.metricsEnabled = serverless.service.custom.apiGateway.metricsEnabled || DEFAULT_METRICS_ENABLED;
 
     if (options) {
       this.stage = options.stage || serverless.service.provider.stage;
@@ -90,11 +106,11 @@ class ApiGatewayCachingSettings {
 
     this.endpointSettings = [];
 
-    this.cacheClusterSize = serverless.service.custom.apiGatewayCaching.clusterSize || DEFAULT_CACHE_CLUSTER_SIZE;
-    this.cacheTtlInSeconds = serverless.service.custom.apiGatewayCaching.ttlInSeconds || DEFAULT_TTL;
-    this.dataEncrypted = serverless.service.custom.apiGatewayCaching.dataEncrypted || DEFAULT_DATA_ENCRYPTED;
+    this.cacheClusterSize = serverless.service.custom.apiGateway.clusterSize || DEFAULT_CACHE_CLUSTER_SIZE;
+    this.cacheTtlInSeconds = serverless.service.custom.apiGateway.ttlInSeconds || DEFAULT_TTL;
+    this.dataEncrypted = serverless.service.custom.apiGateway.dataEncrypted || DEFAULT_DATA_ENCRYPTED;
 
-    this.perKeyInvalidation = new PerKeyInvalidationSettings(serverless.service.custom.apiGatewayCaching);
+    this.perKeyInvalidation = new PerKeyInvalidationSettings(serverless.service.custom.apiGateway);
 
     for (let functionName in serverless.service.functions) {
       let functionSettings = serverless.service.functions[functionName];
@@ -104,6 +120,15 @@ class ApiGatewayCachingSettings {
         }
       }
     }
+  }
+
+  validateLoggingObject() {
+    this.logging.enabled = this.logging.enabled !== null || this.logging.enabled !== undefined ? this.logging.enabled : false;
+    this.logging.dataTrace = this.logging.dataTrace || DEFAULT_LOGGING.dataTrace;
+    if (!this.logging.loggingLevel || validLoggingLevels.indexOf(this.logging.loggingLevel) === -1) {
+      this.logging.loggingLevel = DEFAULT_LOGGING.dataTrace;
+    }
+    
   }
 }
 
