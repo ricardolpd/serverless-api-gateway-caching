@@ -2,8 +2,12 @@
 
 [![CircleCI](https://circleci.com/gh/DianaIonita/serverless-api-gateway-caching.svg?style=svg)](https://circleci.com/gh/DianaIonita/serverless-api-gateway-caching)
 
+
 ## Intro
-A plugin for the serverless framework which helps with configuring caching for API Gateway endpoints.
+Most code from this plugin comes from https://github.com/DianaIonita/serverless-api-gateway-caching however, it has been extended to support more functionality in the API-Gateway stages through api calls support since CloudFormation support for this APIGateway::Stages results mostly in errors during stack updates.
+
+
+All content below needs to change.
 
 ## Good to know
 * If you enable caching globally, it does NOT automatically enable caching for your endpoints - you have to be explicit about which endpoints should have caching enabled.
