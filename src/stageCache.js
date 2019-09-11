@@ -46,35 +46,35 @@ const createPatchForStage = (settings) => {
     patch.push({
       op: 'replace',
       path: '/*/*/caching/ttlInSeconds',
-      value: `${settings.cacheTtlInSeconds}`
+      value: `${settings.cacheTtlInSeconds}`,
     });
   }
 
-  path.push({
+  patch.push({
     op: 'replace',
     path: '/*/*/throttling/burstLimit',
-    value: `${settings.throttlingBurstLimit}`
+    value: `${settings.throttlingBurstLimit}`,
   });
 
-  path.push({
+  patch.push({
     op: 'replace',
     path: '/*/*/throttling/rateLimit',
-    value: `${settings.throttlingRateLimit}`
+    value: `${settings.throttlingRateLimit}`,
   });
 
-  path.push({
+  patch.push({
     op: 'replace',
-    path: '/*/*/metrics/metrics',
+    path: '/*/*/metrics/enabled',
     value: `${settings.metricsEnabled}`
   });
 
   if (settings.loggingEnabled) {
-    path.push({
+    patch.push({
       op: 'replace',
       path: '/*/*/logging/dataTrace',
       value: `${settings.logging.dataTrace}`
     });
-    path.push({
+    patch.push({
       op: 'replace',
       path: '/*/*/logging/loglevel',
       value: `${settings.logging.loggingLevel}`
@@ -104,34 +104,39 @@ const patchForMethod = (path, method, endpointSettings) => {
     });
   }
 
-  path.push({
-    op: 'replace',
-    path: `/${patchPath}/throttling/burstLimit`,
-    value: `${settings.throttlingBurstLimit}`
-  });
 
-  path.push({
-    op: 'replace',
-    path: `/${patchPath}/throttling/rateLimit`,
-    value: `${settings.throttlingRateLimit}`
-  });
+  if (endpointSettings.throttlingBurstLimit && endpointSettings.throttlingRateLimit) {
+    patch.push({
+      op: 'replace',
+      path: `/${patchPath}/throttling/burstLimit`,
+      value: `${endpointSettings.throttlingBurstLimit}`,
+    });
 
-  path.push({
-    op: 'replace',
-    path: `/${patchPath}/metrics/metrics`,
-    value: `${settings.metricsEnabled}`
-  });
+    patch.push({
+      op: 'replace',
+      path: `/${patchPath}/throttling/rateLimit`,
+      value: `${endpointSettings.throttlingRateLimit}`
+    });
+  }
+  
+  if (endpointSettings.metricsEnabled) {
+    patch.push({
+      op: 'replace',
+      path: `/${patchPath}/metrics/enabled`,
+      value: `${endpointSettings.metricsEnabled}`
+    });  
+  }
 
-  if (settings.logging.enabled) {
-    path.push({
+  if (endpointSettings.logging && endpointSettings.logging.enabled) {
+    patch.push({
       op: 'replace',
       path: `/${patchPath}/logging/dataTrace`,
-      value: `${settings.logging.dataTrace}`
+      value: `${endpointSettings.logging.dataTrace}`
     });
-    path.push({
+    patch.push({
       op: 'replace',
       path: `/${patchPath}/logging/loglevel`,
-      value: `${settings.logging.loggingLevel}`
+      value: `${endpointSettings.logging.loggingLevel}`
     });
   }
 

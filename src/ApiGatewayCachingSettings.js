@@ -89,12 +89,12 @@ class ApiGatewayCachingSettings {
     }
     this.cachingEnabled = serverless.service.custom.apiGateway.cachingEnabled;
     this.apiGatewayIsShared = serverless.service.custom.apiGateway.apiGatewayIsShared;
-    this.logging = serverless.service.custom.serverless.service.custom.apiGateway.logging || DEFAULT_LOGGING;
+    this.logging = serverless.service.custom.apiGateway.logging || DEFAULT_LOGGING;
     this.validateLoggingObject();
     this.loggingEnabled = this.logging.enabled;
-    this.throttlingBurstLimit = serverless.service.custom.serverless.service.custom.apiGateway.throttlingBurstLimit || DEFAULT_THROTTLING_BURST_LIMIT;
-    this.throttlingRateLimit = serverless.service.custom.serverless.service.custom.apiGateway.throttlingRateLimit || DEFAULT_THROTTLING_RATE_LIMIT;
-    this.metricsEnabled = serverless.service.custom.serverless.service.custom.apiGateway.metricsEnabled || DEFAULT_METRICS_ENABLED;
+    this.throttlingBurstLimit = serverless.service.custom.apiGateway.throttlingBurstLimit || DEFAULT_THROTTLING_BURST_LIMIT;
+    this.throttlingRateLimit = serverless.service.custom.apiGateway.throttlingRateLimit || DEFAULT_THROTTLING_RATE_LIMIT;
+    this.metricsEnabled = serverless.service.custom.apiGateway.metricsEnabled || DEFAULT_METRICS_ENABLED;
 
     if (options) {
       this.stage = options.stage || serverless.service.provider.stage;
@@ -125,7 +125,7 @@ class ApiGatewayCachingSettings {
   validateLoggingObject() {
     this.logging.enabled = this.logging.enabled !== null || this.logging.enabled !== undefined ? this.logging.enabled : false;
     this.logging.dataTrace = this.logging.dataTrace || DEFAULT_LOGGING.dataTrace;
-    if (!this.logging.loggingLevel || validLoggingLevels.indexOf(this.logging.loggingLevel) !== -1) {
+    if (!this.logging.loggingLevel || validLoggingLevels.indexOf(this.logging.loggingLevel) === -1) {
       this.logging.loggingLevel = DEFAULT_LOGGING.dataTrace;
     }
     
